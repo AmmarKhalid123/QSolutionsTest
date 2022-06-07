@@ -1,0 +1,88 @@
+//SPDX-License-Identifier: GPL-3.0
+
+pragma solidity >=0.5.0 <0.9.0;
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0-solc-0.7/contracts/token/ERC721/ERC721.sol";
+
+import "https://github.com/OpenZeppelin/openzeppelin-contracts/blob/v3.4.0-solc-0.7/contracts/token/ERC721/IERC721.sol";
+
+/**
+ * @title ERC20 interface
+ * @dev see https://github.com/ethereum/EIPs/issues/20
+ */
+interface IERC20 {
+    function totalSupply() external view returns (uint256);
+
+    function balanceOf(address who) external view returns (uint256);
+
+    function allowance(address owner, address spender) external view returns (uint256);
+
+    function transfer(address to, uint256 value) external returns (bool);
+
+    function approve(address spender, uint256 value) external returns (bool);
+
+    function transferFrom(address from, address to, uint256 value) external returns (bool);
+
+    event Transfer(address indexed from, address indexed to, uint256 value);
+
+    event Approval(address indexed owner, address indexed spender, uint256 value);
+}
+
+
+contract School is ERC721{
+
+    address admin;
+    mapping(address => uint) baseTerm;
+    mapping (string => address) courses;
+    mapping ((string => address) => bool) courses_completed;
+    mapping (string => address) students;
+    mapping (string => uint) basePrice;
+    uint baseFee = 0;
+    uint256 token_id = 0;
+    event Certificate(string course, uint256 token_id);
+
+
+    constructor(uint _baseFees){
+        admin = msg.sender;
+        baseFee = _baseFees;
+    }
+
+    function isOwner() public view returns (bool) {
+        return msg.sender == admin;
+    }
+    modifier onlyOwner() {
+        require(isOwner());
+        _;
+    }
+    
+
+    function createCourse(string memory course, address teacher, uint bPrice) public{
+        courses[course] = teacher;
+        basePrice[course] = bPrice;
+    }
+
+    function setBaseFees(uint _baseFees) public onlyOwner{
+        baseFee = _baseFees;
+    }
+
+    function getCoursePrice(string calldata course)public view returns(uint){
+        return basePrice[course]+(basePrice[course]*3)+basePrice[course]*baseFee/100;
+    }
+
+    function enroll(string calldata course) public payable{
+        IERC20 QTKN = IERC20(0xD7ACd2a9FD159E69Bb102A1ca21C9a3e3A5F771B);
+
+        require(QTKN.balanceOf(msg.sender)*100 >= basePrice[course]+(basePrice[course]*3)+basePrice[course]*baseFee/100, "Don't have enough QTKN to pay fees");
+        students[course] = msg.sender;
+        QTKN.transferFrom(msg.sender, admin, (basePrice[course]*3)+(basePrice[course]*baseFee)/100);
+        QTKN.transferFrom(msg.sender, courses[course], basePrice[course]);
+    }
+
+    function course_completed(string calldata course) public payable{
+        require(msg.sender == students[course], "You are not enrolled in this course");
+        require(course_completed[course][msg.sender] != true, "You have already completed this course");
+        token_id++;
+        IERC721 nft = IERC721(0x7EF2e0048f5bAeDe046f6BF797943daF4ED8CB47);
+        nft.safeMint(msg.sender, token_id);
+        emit Certificate(course, token_id);
+    }
+}
